@@ -41,6 +41,7 @@
   .slide{
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
+    align-items:safe center; justify-content:safe center;
     text-align:center;
     padding:32px 22px 92px;
     opacity:0; pointer-events:none;
@@ -207,8 +208,9 @@
   #introOverlay{ position:fixed; inset:0; z-index:200; }
   .intro-stage{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    align-items:safe center; justify-content:safe center;
     background:linear-gradient(160deg,#2a1830,#1a2a3a); opacity:0; pointer-events:none;
-    transition:opacity .5s ease;
+    transition:opacity .5s ease; overflow-y:auto; padding:24px 16px;
   }
   .intro-stage.active{ opacity:1; pointer-events:auto; }
   .video-frame{
@@ -266,7 +268,6 @@
 <body>
 <div id="introOverlay">
   <div id="videoStage" class="intro-stage active">
-    <div class="tap-sound-hint" id="tapSoundHint">🔇 tap video for sound</div>
     <div class="video-frame">
       <video id="introVid" src="opening.mp4" playsinline muted autoplay></video>
     </div>
@@ -286,7 +287,7 @@
 <div class="deck" id="deck">
 
   <button class="sound-toggle" id="soundBtn">🔊 play song</button>
-  <audio id="bday-audio" src="birthday.mp3" loop></audio>
+  <audio id="bday-audio" src="birthday.mp3"></audio>
 
   <!-- Slide 1: hitech grand opening -->
   <section class="slide active" id="boot" data-slide>
@@ -442,18 +443,48 @@
 
   const audio = document.getElementById('bday-audio');
   const soundBtn = document.getElementById('soundBtn');
-  let playing = false;
-  soundBtn.addEventListener('click', ()=>{
-    if(!playing){
-      audio.play().catch(()=>{ soundBtn.textContent = '🔇 add birthday.mp3'; });
+  const playlist = ['birthday.mp3', 'birthday2.mp3', 'birthday3.mp3'];
+  let trackIdx = 0;
+  let wantPlaying = true; // site tries to have music going by default
+  audio.src = playlist[trackIdx];
+
+  function tryPlayAudio(){
+    if(!wantPlaying) return;
+    audio.play().then(()=>{
       soundBtn.textContent = '🔈 pause song';
-      playing = true;
+    }).catch(()=>{
+      soundBtn.textContent = '🔊 tap to play song';
+    });
+  }
+  audio.addEventListener('ended', ()=>{
+    trackIdx = (trackIdx + 1) % playlist.length;
+    audio.src = playlist[trackIdx];
+    tryPlayAudio();
+  });
+  audio.addEventListener('error', ()=>{
+    // this track is missing, skip to the next one instead of going silent
+    trackIdx = (trackIdx + 1) % playlist.length;
+    if(trackIdx !== 0){ audio.src = playlist[trackIdx]; tryPlayAudio(); }
+    else { soundBtn.textContent = '🔇 add birthday.mp3/2/3'; }
+  });
+  soundBtn.addEventListener('click', ()=>{
+    if(audio.paused){
+      wantPlaying = true;
+      tryPlayAudio();
     } else {
+      wantPlaying = false;
       audio.pause();
       soundBtn.textContent = '🔊 play song';
-      playing = false;
     }
   });
+  // try to start the playlist the moment the page opens
+  tryPlayAudio();
+  // most browsers block that until a real tap happens somewhere on the page —
+  // this catches the very first tap (video, curtain, buttons, anything) and starts it then
+  document.addEventListener('pointerdown', function firstTap(){
+    if(audio.paused && wantPlaying) tryPlayAudio();
+    document.removeEventListener('pointerdown', firstTap);
+  }, { once:true });
 
   // ---- hitech boot sequence ----
   function typeLine(el, text, speed, cb){
@@ -520,12 +551,10 @@
   const curtainStage = document.getElementById('curtainStage');
   const introVid = document.getElementById('introVid');
   const skipVideo = document.getElementById('skipVideo');
-  const tapSoundHint = document.getElementById('tapSoundHint');
 
   introVid.addEventListener('click', ()=>{
     introVid.muted = false;
     introVid.play().catch(()=>{});
-    tapSoundHint.style.display = 'none';
   });
 
   function goToCurtain(){
